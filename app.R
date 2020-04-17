@@ -122,7 +122,7 @@ body <- dashboardBody(
                             accept = c("text/txt"),
                             buttonLabel = "Choose .txt files",
                             placeholder = "No files have been selected yet."),
-                  div(style = 'overflow: scroll', tableOutput("display_input_data")),
+                  div(style = 'overflow-x: scroll', tableOutput("display_input_data")),
                   width = 12),
               box(title = "Show data",
                   solidHeader = T,
@@ -130,21 +130,20 @@ body <- dashboardBody(
                   collapsible = F,
                   tags$div(align = 'left', 
                            class = 'multicol',
-                           # style = 'overflow: scroll',
+                           style = 'overflow-x: scroll',
                            uiOutput("checkbox_geomlines")),
-                 # div(style = 'overflow: scroll_y', plotOutput("plot01")),
-                  div(style = 'overflow: scroll_y', uiOutput("plotgraph")),
+                           div(style = 'overflow-y: scroll', uiOutput("plotgraph")),
                   width = 12
               )))))
 
 ui <- dashboardPage(skin = "green", header, sidebar, body, 
                     tags$head(tags$style(HTML(" .multicol { 
-                        height: 250px;
+                        height: 200px;
                         -webkit-column-count: 5; /* Chrome, Safari, Opera */ 
                         -moz-column-count: 5;    /* Firefox */ 
                         column-count: 5; 
-                        -moz-column-fill: balance;
-                        -column-fill: balance;
+                        -moz-column-fill: auto;
+                        -column-fill: auto;
                   } "  ## https://www.geeksforgeeks.org/css-column-fill-property/
                                               )
                                          )
@@ -207,7 +206,7 @@ server <- function(input, output, session) {
 
   output$checkbox_geomlines <- renderUI({
     var_options <- unique(molten_data()$variable)
-    checkboxGroupInput("variable_options", "Choose variables:", var_options, inline = TRUE)
+    checkboxGroupInput("variable_options", "Choose variables:", var_options, inline = FALSE)
   })
   
   
