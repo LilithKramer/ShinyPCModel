@@ -25,9 +25,7 @@
 
 
 ## To Do
-## input block foldable, but standard open
-## time slider
-## make colored blocks behind graph if there are multiple years
+## clean up code (some duplication present)
 
 
 ##== install packages and open libraries ====
@@ -75,25 +73,15 @@ dirSet <- "settings/"
 
 fnSettings <- "output_names.csv"
 
-## load file
+## load settings file & rework for labelling and subsetting
 dtOutNames <- fread(paste(dirHome, dirSet, fnSettings, sep = ""))
 dtOutNames$Rname <- gsub("_", "", dtOutNames$Excelname)
 cOutNamesR <- unique(dtOutNames$Rname)
 cOutNamesExcel <- unique(dtOutNames$Excelname)
-
 dtOutNames$Unit <- gsub("_", "'", dtOutNames$Unit)
 dtOutNames$Unit <- gsub("0", "-", dtOutNames$Unit)
 dtOutNames$Unit <- gsub("\\*", "%\\*%", dtOutNames$Unit)
-
 dtOutNames$prettyName <- paste(dtOutNames$Rname, " ~ (", dtOutNames$Unit, ")", sep = "")
-
-#dtOutNames$prettyName[[100]]
-
-#labNames <- c('xLab','yLab')
-#xlab <- parse(text = dtOutNames$prettyName[[100]])
-#ylab <- bquote(.(labNames[2]) ~ y^2)
-#plot(c(1:10), xlab = xlab, ylab = ylab)
-
 
 
 ##==User Interface Start==================
@@ -118,7 +106,8 @@ body <- dashboardBody(
               box(title = "Import data",
                   solidHeader = T,
                   status = "success",
-                  collapsible = F,
+                  collapsible = T,
+                  collapsed = FALSE,
                   p("Multiple files can be imported at the same time. Each file should contain one run only.
                     The files can be in the output format of either PCLake+ Excel or PCLake+ R. 
                     Only .txt files are accepted", br(), 
@@ -141,6 +130,7 @@ body <- dashboardBody(
                   uiOutput("checkbox_geomlines"),
                   p(""),
                   uiOutput("checkbox_facets"),
+                  uiOutput("timeslider"),
                   div(style = 'overflow-y: scroll', uiOutput("plotgraph")),
                   width = 12
               )))))
@@ -235,7 +225,6 @@ server <- function(input, output, session) {
   molten_data <- reactive({
     if(input$model_type == "Excel"){toMelt <- setdiff(colnames(input_data()), intersect(colnames(input_data()), cOutNamesExcel))}
     if(input$model_type == "R"){toMelt <- setdiff(colnames(input_data()), intersect(colnames(input_data()), cOutNamesR))}
-    #toMelt <- grep("RunId|filename|time|Time", colnames(input_data()), value = T)
     totally_molten <- melt(input_data(), id.vars = toMelt)
     return(totally_molten)
   })
@@ -245,6 +234,11 @@ server <- function(input, output, session) {
     checkboxGroupInput("run_options", "Choose run:", file_options, selected = file_options[1], inline = TRUE)
   })
   
+  output$timeslider <- renderUI({
+    max_slider <- max(molten_data()$Time)
+    sliderInput("timeslider_true", label = "Choose timespan (days):", 0, max_slider, value = c(0, max_slider))
+   })
+  
   output$checkbox_facets <- renderUI({
     if(input$model_type == "Excel"){keepIn <- intersect(colnames(input_data()), cOutNamesExcel)}
     if(input$model_type == "R"){keepIn <- intersect(colnames(input_data()), cOutNamesR)}
@@ -253,6 +247,8 @@ server <- function(input, output, session) {
     varSelectInput("variable_options", "Choose variables:", input_data_adj, multiple = TRUE)
   })
   
+  
+ 
   
   # this function defines a height of your plot
   plot_height <- function() {
@@ -266,7 +262,10 @@ server <- function(input, output, session) {
     
     req(length(input$variable_options)>0, input$run_options)
 
-    subset_data <- molten_data()[(filename %in% input$run_options) & (variable %in% input$variable_options),]
+    subset_data <- molten_data()[(filename %in% input$run_options) & 
+                                 (variable %in% input$variable_options) &
+                                 (Time >= input$timeslider_true[1]) & 
+                                 (Time <= input$timeslider_true[2]),]
     
     if(input$model_type == "Excel"){getPrettyName <- unique(dtOutNames[, c("Excelname", "prettyName")])}
     if(input$model_type == "R"){getPrettyName <- unique(dtOutNames[, c("Rname", "prettyName")])}
@@ -275,8 +274,14 @@ server <- function(input, output, session) {
     
     plot <- ggplot(subset_data_addNames, aes(x = Time, y = value, color = filename)) +
       geom_line() +
+      scale_x_continuous(expand = c(0, 0), minor_breaks = seq(0, max(molten_data()$Time), 365/4), breaks = seq(0, max(molten_data()$Time), 365)) + 
+      scale_y_continuous(expand = c(0, 0)) +
       facet_wrap("prettyName", labeller = label_parsed, ncol = 1, scales = "free_y") +
-      theme_bw()
+      theme_bw() +
+      theme(
+        #panel.grid.major.x = element_line(color = "darkgrey"),
+        panel.grid.minor.x = element_line(linetype = "dashed") #, color = "lightgrey" linetype = "dashed")
+      )
     
     return(plot)
   })
