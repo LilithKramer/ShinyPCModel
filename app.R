@@ -23,8 +23,11 @@
 ## dfXXX   = dataframe      
 ## dtXXX   = datatable 
 
-## Info 
-## multiple PCModel scenario's only contain a header once!
+
+## To Do
+## input block foldable, but standard open
+## time slider
+## make colored blocks behind graph if there are multiple years
 
 
 ##== install packages and open libraries ====
@@ -77,6 +80,21 @@ dtOutNames <- fread(paste(dirHome, dirSet, fnSettings, sep = ""))
 dtOutNames$Rname <- gsub("_", "", dtOutNames$Excelname)
 cOutNamesR <- unique(dtOutNames$Rname)
 cOutNamesExcel <- unique(dtOutNames$Excelname)
+
+dtOutNames$Unit <- gsub("_", "'", dtOutNames$Unit)
+dtOutNames$Unit <- gsub("0", "-", dtOutNames$Unit)
+dtOutNames$Unit <- gsub("\\*", "%\\*%", dtOutNames$Unit)
+
+dtOutNames$prettyName <- paste(dtOutNames$Rname, " ~ (", dtOutNames$Unit, ")", sep = "")
+
+#dtOutNames$prettyName[[100]]
+
+#labNames <- c('xLab','yLab')
+#xlab <- parse(text = dtOutNames$prettyName[[100]])
+#ylab <- bquote(.(labNames[2]) ~ y^2)
+#plot(c(1:10), xlab = xlab, ylab = ylab)
+
+
 
 ##==User Interface Start==================
 
@@ -175,6 +193,8 @@ server <- function(input, output, session) {
       make_datatable[,(changeCols_numeric):= lapply(.SD, as.numeric), .SDcols = changeCols_numeric]
       changeCols_factor <- setdiff(colnames(make_datatable), changeCols_numeric)
       make_datatable[,(changeCols_factor):= lapply(.SD, FUN = function(x) as.factor(as.character(x))), .SDcols = changeCols_factor]
+      
+      
     } else {
       
       validate(
@@ -245,12 +265,17 @@ server <- function(input, output, session) {
   output$contents <- renderPlot({
     
     req(length(input$variable_options)>0, input$run_options)
-    
+
     subset_data <- molten_data()[(filename %in% input$run_options) & (variable %in% input$variable_options),]
     
-    plot <- ggplot(subset_data, aes(x = Time, y = value, color = filename)) +
+    if(input$model_type == "Excel"){getPrettyName <- unique(dtOutNames[, c("Excelname", "prettyName")])}
+    if(input$model_type == "R"){getPrettyName <- unique(dtOutNames[, c("Rname", "prettyName")])}
+    colnames(getPrettyName)[which(colnames(getPrettyName) %in% c("Rname", "Excelname"))] <- "variable"
+    subset_data_addNames <- subset_data[getPrettyName, on = 'variable', prettyName := i.prettyName]
+    
+    plot <- ggplot(subset_data_addNames, aes(x = Time, y = value, color = filename)) +
       geom_line() +
-      facet_wrap("variable", ncol = 1, scales = "free_y") +
+      facet_wrap("prettyName", labeller = label_parsed, ncol = 1, scales = "free_y") +
       theme_bw()
     
     return(plot)
