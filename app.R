@@ -166,7 +166,7 @@ server <- function(input, output, session) {
   input_data <- reactive({
 
     read_datatables <- lapply(input_files(), fread_AddFilename)
-    
+
     if(input$model_type == "Excel"){
       
       validate(
@@ -260,10 +260,16 @@ server <- function(input, output, session) {
   # this function defines your plot, which depends on input$dimension1In
   output$contents <- renderPlot({
     
+    # browser()
     req(length(input$variable_options)>0, input$run_options)
 
+    ## varSelectInput makes a 'symbol list' that you cannot just 'unlist' (wrong class type)
+    ## somehow I can't get the !! option to work that is mentioned on the function page of varSelectInput
+    ## so... I made this ugly lapply thing below to unlist the variable options input
+    var_op <- unlist(lapply(input$variable_options, function(x) rlang::as_name(x))) ## niet chique
+
     subset_data <- molten_data()[(filename %in% input$run_options) & 
-                                 (variable %in% input$variable_options) &
+                                 (variable %in% var_op) &
                                  (Time >= input$timeslider_true[1]) & 
                                  (Time <= input$timeslider_true[2]),]
     
