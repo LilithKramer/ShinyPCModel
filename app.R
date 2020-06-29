@@ -126,6 +126,8 @@ body <- dashboardBody(
                   p(""),
                   uiOutput("checkbox_facets"),
                   uiOutput("timeslider"),
+                  actionButton("make_a_plot", "Make graphs", icon("caret-right"), 
+                               style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
                   div(style = 'overflow-y: scroll', uiOutput("plotgraph")),
                   width = 12
               )))))
@@ -160,7 +162,6 @@ server <- function(input, output, session) {
   
   input_data <- reactive({
     
-    # browser()
     read_datatables <- lapply(input_files(), fread_AddFilename)
 
     if(input$model_type == "Excel"){
@@ -233,9 +234,10 @@ server <- function(input, output, session) {
   })
   
   output$timeslider <- renderUI({
+    min_slider <- min(molten_data()$Time)
     max_slider <- max(molten_data()$Time)
-    sliderInput("timeslider_true", label = "Choose timespan (days):", 0, max_slider, value = c(0, max_slider))
-   })
+    sliderInput("timeslider_true", label = "Choose timespan (days):", min_slider, max_slider, value = c(0, max_slider))
+    })
   
   output$checkbox_facets <- renderUI({
     if(input$model_type == "Excel"){keepIn <- intersect(colnames(input_data()), cOutNamesExcel)}
@@ -245,31 +247,37 @@ server <- function(input, output, session) {
     varSelectInput("variable_options", "Choose variables:", input_data_adj, multiple = TRUE)
   })
   
-  
+  ## make the display of the plots dependent on the "Make Plot" button
+  list_plot_input <- eventReactive(input$make_a_plot, {
+    req(length(input$variable_options)>0, input$run_options)
+    
+    df_variables  <- input$variable_options
+    df_run        <- input$run_options
+    df_timeslider <- input$timeslider_true
+    list_inputs <- list(var = df_variables, run = df_run, ts = df_timeslider)
+    return(list_inputs)
+    
+  })
  
-  
   # this function defines a height of your plot
   plot_height <- function() {
     req(input$variable_options)
-    amount_of_plots <- max(1, length(input$variable_options)) * 200 
+    amount_of_plots <- max(1, length(list_plot_input()$var)) * 200 
     return(amount_of_plots)
   }
   
   # this function defines your plot, which depends on input$dimension1In
   output$contents <- renderPlot({
     
-    # browser()
-    req(length(input$variable_options)>0, input$run_options)
-
     ## varSelectInput makes a 'symbol list' that you cannot just 'unlist' (wrong class type)
-    ## somehow I can't get the !! option to work that is mentioned on the function page of varSelectInput
+    ## somehow I can't get the !! option to work (from rlang) that is mentioned on the function page of varSelectInput
     ## so... I made this ugly lapply thing below to unlist the variable options input
-    var_op <- unlist(lapply(input$variable_options, function(x) rlang::as_name(x))) ## niet chique
-
-    subset_data <- molten_data()[(filename %in% input$run_options) & 
-                                 (variable %in% var_op) &
-                                 (Time >= input$timeslider_true[1]) & 
-                                 (Time <= input$timeslider_true[2]),]
+    var_op <- unlist(lapply(list_plot_input()$var, function(x) rlang::as_name(x))) ## niet chique
+    
+    subset_data <- molten_data()[(filename %in% list_plot_input()$run) & 
+                                   (variable %in% var_op) &
+                                   (Time >= list_plot_input()$ts[1]) & 
+                                   (Time <= list_plot_input()$ts[2]),]
     
     if(input$model_type == "Excel"){getPrettyName <- unique(dtOutNames[, c("Excelname", "prettyName")])}
     if(input$model_type == "R"){getPrettyName <- unique(dtOutNames[, c("Rname", "prettyName")])}
@@ -279,9 +287,10 @@ server <- function(input, output, session) {
     plot <- ggplot(subset_data_addNames, aes(x = Time, y = value, color = filename)) +
       geom_line() +
       scale_x_continuous(expand = c(0, 0), minor_breaks = seq(0, max(molten_data()$Time), 365/4), breaks = seq(0, max(molten_data()$Time), 365)) + 
-      scale_y_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) + ## this sets the y-axis to zero (otherwise there's a small gap below the axis); maybe remove this again as for the BalanceErrors the axes should go below zero
       facet_wrap("prettyName", labeller = label_parsed, ncol = 1, scales = "free_y") +
       theme_bw() +
+      geom_text(aes(y = value * 1.1, label = "")) + ## if the scale is set to expand = c(0,0), the max value can appear to be cut of. This is a workaround to fix that.
       theme(
         #panel.grid.major.x = element_line(color = "darkgrey"),
         panel.grid.minor.x = element_line(linetype = "dashed") #, color = "lightgrey" linetype = "dashed")
