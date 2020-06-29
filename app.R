@@ -36,12 +36,12 @@
 # install.packages("data.table")
 
 library(tidyverse)
-library(data.table)
 library(shiny)         
 library(shinydashboard)
 library(gridExtra)
 library(plotly)
 library(rlang)
+library(data.table)
 
 ##== functions ======
 
@@ -62,24 +62,19 @@ options(shiny.maxRequestSize = 30*1024^2) ## maximum upload size is now 30Mb, st
 
 ##== set paths ========
 
-# setwd("C:/Users/Lilith Kramer/Documents/PhD/Documenten/3.0. PhD inhoudelijk/3.8. R/ShinyPCModel")
-
 #!# directories
-#dirInp <- "input/"
-## dirInpPCModel <- "C:/Users/Lilith Kramer/Documents/PhD/Documenten/3.0. PhD inhoudelijk/3.6. PCLake/PCModel-master/Licence_agreement/I_accept/PCModel1350/PCModel/3.00/Models/PCLake+/6.13.16/Txt"
-dirHome <- "C:/Users/Lilith Kramer/Documents/PhD/Documenten/3.0. PhD inhoudelijk/3.8. R/ShinyPCModel/"
+dirHome <- "C:/Users/Lilith Kramer/Documents/PhD/Documenten/_01. Onderzoek/01.07. R/01.07.01. ShinyPCModel/"
 dirSet <- "settings/"
-#dirOut <- "output/"
 
 fnSettings <- "output_names.csv"
 
 ## load settings file & rework for labelling and subsetting
-dtOutNames <- fread(paste(dirHome, dirSet, fnSettings, sep = ""))
+dtOutNames <- data.table::fread(paste(dirSet, fnSettings, sep = ""))
 dtOutNames$Rname <- gsub("_", "", dtOutNames$Excelname)
 cOutNamesR <- unique(dtOutNames$Rname)
 cOutNamesExcel <- unique(dtOutNames$Excelname)
 dtOutNames$Unit <- gsub("_", "'", dtOutNames$Unit)
-dtOutNames$Unit <- gsub("0", "-", dtOutNames$Unit)
+dtOutNames$Unit <- gsub("0", "'-'", dtOutNames$Unit)
 dtOutNames$Unit <- gsub("\\*", "%\\*%", dtOutNames$Unit)
 dtOutNames$prettyName <- paste(dtOutNames$Rname, " ~ (", dtOutNames$Unit, ")", sep = "")
 
@@ -164,7 +159,8 @@ server <- function(input, output, session) {
   
   
   input_data <- reactive({
-
+    
+    # browser()
     read_datatables <- lapply(input_files(), fread_AddFilename)
 
     if(input$model_type == "Excel"){
@@ -198,9 +194,11 @@ server <- function(input, output, session) {
       
       if(length(read_datatables)>1){
 
-        make_datatable <- as.data.table(read_datatables %>% reduce(full_join))
-  
-        }
+        common_colnames <- Reduce(intersect, lapply(read_datatables, colnames))
+        dt_setkey <- lapply(read_datatables, function(x) setkeyv(data.table(x), common_colnames))
+        make_datatable <- Reduce(function(...) merge(..., all=TRUE), dt_setkey)
+        
+       }
       
       if("-1" %in% colnames(make_datatable)){make_datatable[, which(colnames(make_datatable) == "-1"):= NULL]}
       changeCols_numeric <- intersect(colnames(make_datatable), c(cOutNamesR, "Time", "time")) ## first character = _
