@@ -25,8 +25,8 @@
 
 
 ## To Do
-## clean up code (some duplication present)
-
+## Maybe add spinners for waiting time during loading
+## Maybe make ggplots plotly's
 
 ##== install packages and open libraries ====
 
@@ -34,6 +34,7 @@
 # install.packages("shinydashboard") ## nice layouts for shiny
 # install.packages("tidyverse")
 # install.packages("data.table")
+# install.packages("gtools")
 
 library(tidyverse)
 library(shiny)         
@@ -42,6 +43,8 @@ library(gridExtra)
 library(plotly)
 library(rlang)
 library(data.table)
+library(gtools)
+library(scales)
 
 ##== functions ======
 
@@ -210,7 +213,8 @@ server <- function(input, output, session) {
       if("time" %in% colnames(make_datatable)){colnames(make_datatable)[which(colnames(make_datatable)=="time")] <- "Time"}
       
     }
-
+     
+    
      return(make_datatable)
   
  })
@@ -225,9 +229,27 @@ server <- function(input, output, session) {
     if(input$model_type == "Excel"){toMelt <- setdiff(colnames(input_data()), intersect(colnames(input_data()), cOutNamesExcel))}
     if(input$model_type == "R"){toMelt <- setdiff(colnames(input_data()), intersect(colnames(input_data()), cOutNamesR))}
     totally_molten <- melt(input_data(), id.vars = toMelt)
+    totally_molten$filename <- factor(totally_molten$filename, levels = mixedsort(levels(totally_molten$filename))) ## reorder levels according to characters AND numericals so the sorting makes sense in the plots
     return(totally_molten)
   })
 
+  # make colours for lines in plot
+  line_colours <- reactive({
+    
+    cbp1 <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
+              "#F0E442", "#0072B2", "#D55E00", "#CC79A7") ## color blind palette from https://www.datanovia.com/en/blog/ggplot-colors-best-tricks-you-will-love/
+    
+    if(length(levels(molten_data()$filename)) - 8 > 0){
+      line_colours <- c(cbp1, scales::hue_pal()(length(levels(molten_data()$filename)) - 8))}
+    if(length(levels(molten_data()$filename)) - 8 <= 0){
+      line_colours <- cbp1[1:length(levels(molten_data()$filename))]
+    }   
+    
+    names(line_colours) <- levels(molten_data()$filename)
+    return(line_colours)
+  })
+  
+  
   output$checkbox_geomlines <- renderUI({
     file_options <- unique(molten_data()$filename)
     checkboxGroupInput("run_options", "Choose run:", file_options, selected = file_options[1], inline = TRUE)
@@ -266,6 +288,7 @@ server <- function(input, output, session) {
     return(amount_of_plots)
   }
   
+  
   # this function defines your plot, which depends on input$dimension1In
   output$contents <- renderPlot({
     
@@ -274,6 +297,7 @@ server <- function(input, output, session) {
     ## so... I made this ugly lapply thing below to unlist the variable options input
     var_op <- unlist(lapply(list_plot_input()$var, function(x) rlang::as_name(x))) ## niet chique
     
+    ## get subset
     subset_data <- molten_data()[(filename %in% list_plot_input()$run) & 
                                    (variable %in% var_op) &
                                    (Time >= list_plot_input()$ts[1]) & 
@@ -283,13 +307,17 @@ server <- function(input, output, session) {
     if(input$model_type == "R"){getPrettyName <- unique(dtOutNames[, c("Rname", "prettyName")])}
     colnames(getPrettyName)[which(colnames(getPrettyName) %in% c("Rname", "Excelname"))] <- "variable"
     subset_data_addNames <- subset_data[getPrettyName, on = 'variable', prettyName := i.prettyName]
+  
+    ## easy fix for problem with y-axis, that I would like to start at zero, except when the error balances are included
+    ifelse(any(grepl("Error", var_op)), limit_y <- NA, limit_y <- 0)  ## if Error is present, unleash the y-axis from it's zero
     
     plot <- ggplot(subset_data_addNames, aes(x = Time, y = value, color = filename)) +
       geom_line() +
       scale_x_continuous(expand = c(0, 0), minor_breaks = seq(0, max(molten_data()$Time), 365/4), breaks = seq(0, max(molten_data()$Time), 365)) + 
-      scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) + ## this sets the y-axis to zero (otherwise there's a small gap below the axis); maybe remove this again as for the BalanceErrors the axes should go below zero
+      scale_y_continuous(expand = c(0, 0), limits = c(limit_y, NA)) + ## this sets the y-axis to zero (otherwise there's a small gap below the axis); maybe remove this again as for the BalanceErrors the axes should go below zero
       facet_wrap("prettyName", labeller = label_parsed, ncol = 1, scales = "free_y") +
       theme_bw() +
+      scale_color_manual(values = line_colours()) +
       geom_text(aes(y = value * 1.1, label = "")) + ## if the scale is set to expand = c(0,0), the max value can appear to be cut of. This is a workaround to fix that.
       theme(
         #panel.grid.major.x = element_line(color = "darkgrey"),
@@ -303,7 +331,6 @@ server <- function(input, output, session) {
   output$plotgraph <- renderUI({
     plotOutput("contents", height = plot_height(), width = "100%")
   })
-  
   
 }
 
