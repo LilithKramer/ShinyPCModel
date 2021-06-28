@@ -1,0 +1,15 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+output/
+screenshot2_ShinyPCModel.PNG
+screenshot_ShinyPCModel.PNG
+settings/output_names_27may2021.csv
+testing_colourPicker_IAmNotAFanYet.R
+settings/output_names_firstVersion_handmade.csv
+miniPCLake_dynamic_Master_course_2021_1~output.pdf
+app_backup_theStartOfAddingColourPicker_DidNotFinishBecauseItsNotMeantToWorkForThis.R
+app_backup_checkBoxGroup.R
+input/sysrep0.txt
+input/sysrep1.txt
