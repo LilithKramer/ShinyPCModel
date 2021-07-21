@@ -217,15 +217,20 @@ server <- function(input, output, session) {
   
   
   input_model_data <- reactive({
+    # browser()
     read_datatables <- lapply(input_model_files(), fread_AddFilename)
     if(input$model_type == "Excel"){
       validate(
         need(length(which(sapply(read_datatables, function(y) "RunId" %in% colnames(y)[1]))) > 0,
              "Please check the file format. You have selected Excel as the source of your text files. However, the RunId column name is either not the header of the first column or the RunId column name is missing in all input files.")
         )
+      ## The excel version of PCLake outputs the system0, system1 txt files with only 1 header somewhere. Here I check in which file this header occurs and I save those names. 
       names_all_cols <- colnames(read_datatables[[which(sapply(read_datatables, function(y) "RunId" %in% colnames(y)))]])
+      ## then I bind all the dataframes together
       make_datatable <- rbindlist(read_datatables, use.names = F)
+      ## and give them the headers of the dataframe that originally had them
       if(colnames(make_datatable)[1] != "RunId"){colnames(make_datatable) <- names_all_cols}
+      ## often there's a column with -1 in there, a left-over from the model run, this column is clutter and can be removed
       if("-1" %in% colnames(make_datatable)){make_datatable[, which(colnames(make_datatable) == "-1"):= NULL]}
       changeCols_numeric <- intersect(colnames(make_datatable), c(cOutNamesExcel, "Time", "time"))
       make_datatable[,(changeCols_numeric):= lapply(.SD, as.numeric), .SDcols = changeCols_numeric]
@@ -245,7 +250,7 @@ server <- function(input, output, session) {
         make_datatable <- Reduce(function(...) merge(..., all=TRUE), dt_setkey)
        }
       if("-1" %in% colnames(make_datatable)){make_datatable[, which(colnames(make_datatable) == "-1"):= NULL]}
-      if(input$model_r_type == 'Network'){
+      if(input$model_type != "Excel" & input$model_r_type == 'Network'){
         names_to_melt <- grep("^[[:alnum:]]+N[[:digit:]]$", colnames(make_datatable), invert = T, perl = T)
         molten_df <- melt(make_datatable, colnames(make_datatable)[names_to_melt])
         molten_df$node <- gsub("^([[:alnum:]]+)(N[[:digit:]]$)", "\\2", molten_df$variable, perl = T)
@@ -268,13 +273,13 @@ server <- function(input, output, session) {
   
   
   molten_data <- reactive({
+    # browser()
     if(input$model_type == "Excel"){toMelt <- setdiff(colnames(input_model_data()), intersect(colnames(input_model_data()), cOutNamesExcel))}
     if(input$model_type == "R"){toMelt <- setdiff(colnames(input_model_data()), intersect(colnames(input_model_data()), cOutNamesR))}
     totally_molten <- melt(input_model_data(), id.vars = toMelt)
     totally_molten$filename <- factor(totally_molten$filename, levels = mixedsort(levels(totally_molten$filename))) ## reorder levels according to characters AND numericals so the sorting makes sense in the plots
     return(totally_molten)
   })
-  
   
   ## input measurement data
   input_measurement_data <- reactive({
@@ -344,16 +349,17 @@ server <- function(input, output, session) {
   
   ## make the display of the plots dependent on the "Make Graphs" button
   list_plot_input <- eventReactive(input$make_a_plot, {
-    if(input$model_r_type == 'Network'){req(length(input$variable_options)>0, input$run_options, length(input$node_options)>0)}
-    if(input$model_r_type != 'Network'){req(length(input$variable_options)>0, input$run_options)}
+    # browser()
+    if(input$model_type != "Excel" & input$model_r_type == 'Network'){req(length(input$variable_options)>0, input$run_options, length(input$node_options)>0)}
+    if(input$model_type == "Excel" | input$model_r_type != 'Network'){req(length(input$variable_options)>0, input$run_options)}
     
     df_variables  <- input$variable_options
     df_run        <- input$run_options
     df_timeslider <- input$timeslider_true
-    if(input$model_r_type == 'Network'){df_nodes <- input$node_options}
-    ifelse(input$model_r_type == 'Network', 
-           list_inputs <- list(var = df_variables, run = df_run, ts = df_timeslider, nodes = df_nodes),
-           list_inputs <- list(var = df_variables, run = df_run, ts = df_timeslider))
+    if(input$model_type != "Excel" & input$model_r_type == 'Network'){df_nodes <- input$node_options}
+    ifelse(input$model_type == "Excel" | input$model_r_type != 'Network', 
+           list_inputs <- list(var = df_variables, run = df_run, ts = df_timeslider),
+           list_inputs <- list(var = df_variables, run = df_run, ts = df_timeslider, nodes = df_nodes))
     return(list_inputs)
   })
  
@@ -370,7 +376,7 @@ server <- function(input, output, session) {
     
     plot_func <- function(){
   
-    #browser()
+    # browser()
     ## varSelectInput makes a 'symbol list' that you cannot just 'unlist' (wrong class type)
     ## somehow I can't get the !! option to work (from rlang) that is mentioned on the function page of varSelectInput
     ## so... I made this ugly lapply thing below to unlist the variable options input
@@ -382,7 +388,7 @@ server <- function(input, output, session) {
                                  (Time >= list_plot_input()$ts[1]) & 
                                  (Time <= list_plot_input()$ts[2]),]
     
-    if(input$model_r_type == 'Network'){
+    if(input$model_type != "Excel" & input$model_r_type == 'Network'){
       subset_data <- subset_data[node %in% list_plot_input()$nodes, ]
     }
     
@@ -405,15 +411,15 @@ server <- function(input, output, session) {
       
     # plot <- ggplot(subset_data_addNames, aes(x = Time, y = value, color = filename)) +
     plot <- ggplot(subset_data_addNames, aes(x = Time, y = value)) +
-      {if(input$model_r_type == 'Network') geom_line(aes(color = node, linetype = filename))} +
-      {if(input$model_r_type != 'Network') geom_line(aes(color = filename))} +
+      {if(input$model_type != "Excel" & input$model_r_type == 'Network') geom_line(aes(color = node, linetype = filename))} +
+      {if(input$model_r_type != 'Network' | input$model_type == "Excel") geom_line(aes(color = filename))} +
       {if(input$measurement_data == TRUE) geom_point(aes(x = Time, y = value, fill = location), data = subset_msm_data, size = 3, shape = 21, stroke = 0.1)} +
       scale_x_continuous(expand = c(0, 0), minor_breaks = seq(0, max(molten_data()$Time), 365/4), breaks = seq(0, max(molten_data()$Time), 365)) + 
       scale_y_continuous(expand = c(0, 0), limits = c(limit_y, NA)) + ## this sets the y-axis to zero (otherwise there's a small gap below the axis); maybe remove this again as for the BalanceErrors the axes should go below zero
       facet_wrap("prettyName", labeller = label_parsed, ncol = 1, scales = "free_y") +
       theme_bw() +
-      {if(input$model_r_type == 'Network') scale_color_manual(values = get_colours(subset_data_addNames$node))} +
-      {if(input$model_r_type != 'Network') scale_color_manual(values = get_colours(subset_data_addNames$filename))} +
+      {if(input$model_type != "Excel" & input$model_r_type == 'Network') scale_color_manual(values = get_colours(subset_data_addNames$node))} +
+      {if(input$model_r_type != 'Network' | input$model_type == "Excel") scale_color_manual(values = get_colours(subset_data_addNames$filename))} +
       geom_text(aes(y = value * 1.1, label = "")) + ## if the scale is set to expand = c(0,0), the max value can appear to be cut of. This is a workaround to fix that.
       theme(
         #panel.grid.major.x = element_line(color = "darkgrey"),
@@ -445,14 +451,18 @@ server <- function(input, output, session) {
                                    (Time >= list_plot_input()$ts[1]) & 
                                    (Time <= list_plot_input()$ts[2]),]
     
-    if(input$model_r_type == 'Network'){
+    if(input$model_type != "Excel" & input$model_r_type == 'Network'){
       subset_data <- subset_data[node %in% list_plot_input()$nodes, ]
     }
     
-    subset_data2 <- datatable(dcast(subset_data, filename + Time ~ variable + node, value.var="value"),
-                              options = list(lengthMenu = list(c(5, 10, 25, 50, -1), c('5', '10', '25', '50', 'All')),
-                                             pageLength = 10))
+    # browser()
+    if(input$model_type != "Excel" & input$model_r_type == 'Network'){subset_data2 <- datatable(dcast(subset_data, filename + Time ~ variable + node, value.var="value"),
+                                                                                                options = list(lengthMenu = list(c(5, 10, 25, 50, -1), c('5', '10', '25', '50', 'All')),
+                                                                                                               pageLength = 10))} 
+    if(input$model_type == "Excel" | input$model_r_type != 'Network'){
+    subset_data2 <- datatable(dcast(subset_data, filename + Time ~ variable, value.var = "value"))}
     
+    return(subset_data2)
   })
   
 
@@ -498,11 +508,13 @@ server <- function(input, output, session) {
                                      (Time >= list_plot_input()$ts[1]) & 
                                      (Time <= list_plot_input()$ts[2]),]
       
-      if(input$model_r_type == 'Network'){
+      if(input$model_type != "Excel" & input$model_r_type == 'Network'){
         subset_data <- subset_data[node %in% list_plot_input()$nodes, ]
       }
       
-      subset_data2 <- dcast(subset_data, filename + Time ~ variable + node, value.var="value")
+      ifelse(input$model_type != "Excel" & input$model_r_type == 'Network', 
+        subset_data2 <- dcast(subset_data, filename + Time ~ variable + node, value.var="value"),
+        subset_data2 <- dcast(subset_data, filename + Time ~ variable, value.var="value"))
 
       write.csv(subset_data2, file, row.names = F)
     },
