@@ -41,6 +41,7 @@
 # install.packages("data.table")
 # install.packages("gtools")
 # install.packages("DT")
+# install.packages("shinyWidgets")
 
 library(DT)
 library(tidyverse)
@@ -50,8 +51,9 @@ library(gridExtra)
 library(plotly)
 library(rlang)
 library(data.table)
-library(gtools)
+library(gtools) ## used for mixedsorting (alpha numeric sorting)
 library(scales)
+library(shinyWidgets) 
 
 # library(plotly)
 
@@ -141,7 +143,7 @@ body <- dashboardBody(
                     It is also expected that the 'RunId' column is the first column in the .txt file that contains the headers.", br(),
                     "If you choose the", strong(" R format "), ",", em(" all files"), " should contain headers. However, the order of the headers does not matter.", br(),
                     "Maximum file size is 160MB.",),
-                  radioButtons("model_type", label = "Data source", choices = c("Excel", "R"), selected = "Excel"),
+                  radioButtons("model_type", label = "Data source", choices = c("Excel", "R"), selected = "R"),
                   conditionalPanel(condition = "input.model_type == 'R'",
                                    radioButtons("model_r_type", label = "Model type", choices = c("Single run", "Network"), selected = "Network")),
                   fileInput("input_model_data", NULL,
@@ -164,11 +166,9 @@ body <- dashboardBody(
                   solidHeader = T,
                   status = "success",
                   collapsible = F,
-                  
                   uiOutput("checkbox_geomlines"),
                   conditionalPanel(condition = "input.model_type == 'R'",
                                    uiOutput("checkbox_nodes")),
-                  # actionButton("select_all", "Select or deselect all runs"), ## look at shiny app diepe meren for Deltares
                   p(""),
                   uiOutput("checkbox_facets"),
                   uiOutput("timeslider"),
@@ -217,7 +217,7 @@ server <- function(input, output, session) {
   
   
   input_model_data <- reactive({
-    # browser()
+    #browser()
     read_datatables <- lapply(input_model_files(), fread_AddFilename)
     if(input$model_type == "Excel"){
       validate(
@@ -251,10 +251,11 @@ server <- function(input, output, session) {
        }
       if("-1" %in% colnames(make_datatable)){make_datatable[, which(colnames(make_datatable) == "-1"):= NULL]}
       if(input$model_type != "Excel" & input$model_r_type == 'Network'){
-        names_to_melt <- grep("^[[:alnum:]]+N[[:digit:]]$", colnames(make_datatable), invert = T, perl = T)
+        #browser()
+        names_to_melt <- grep("^[[:alnum:]]+N[[:digit:]]+$", colnames(make_datatable), invert = T, perl = T)
         molten_df <- melt(make_datatable, colnames(make_datatable)[names_to_melt])
-        molten_df$node <- gsub("^([[:alnum:]]+)(N[[:digit:]]$)", "\\2", molten_df$variable, perl = T)
-        molten_df$variable <- gsub("^([[:alnum:]]+)(N[[:digit:]]$)", "\\1", molten_df$variable, perl = T)
+        molten_df$node <- gsub("^([[:alnum:]]+)(N[[:digit:]]+$)", "\\2", molten_df$variable, perl = T)
+        molten_df$variable <- gsub("^([[:alnum:]]+)(N[[:digit:]]+$)", "\\1", molten_df$variable, perl = T)
         unmolten_df <- dcast(molten_df, filename + node + time ~ variable)
         make_datatable <- unmolten_df
       }
@@ -327,10 +328,27 @@ server <- function(input, output, session) {
     checkboxGroupInput("run_options", "Choose run:", file_options, selected = file_options[1], inline = TRUE)
   })
   
+ #  output$checkbox_nodes <- renderUI({
+ #    node_options <- unique(molten_data()$node)
+ #    #browser()
+ #    node_options_sorted <- gtools::mixedsort(levels(node_options))
+ #    checkboxGroupInput("node_options", "Choose node:", node_options_sorted, selected = node_options_sorted[1], inline = TRUE)
+ #  })
+  
   output$checkbox_nodes <- renderUI({
     node_options <- unique(molten_data()$node)
-    checkboxGroupInput("node_options", "Choose node:", node_options, selected = node_options[1], inline = TRUE)
+    #browser()
+    node_options_sorted <- gtools::mixedsort(levels(node_options))
+    pickerInput(inputId = "node_options", 
+                label = "Choose node:",
+                choices = node_options_sorted,
+                selected = node_options_sorted[1],
+                multiple = TRUE,
+                options = list(`actions-box` = TRUE,  ## selectall / deselect all option
+                               `selected-text-format` = "count > 10",
+                               `count-selected-text` = "{0}/{1} nodes"))
   })
+  
   
   output$timeslider <- renderUI({
     min_slider <- min(molten_data()$Time)
@@ -376,7 +394,7 @@ server <- function(input, output, session) {
     
     plot_func <- function(){
   
-    # browser()
+    #browser()
     ## varSelectInput makes a 'symbol list' that you cannot just 'unlist' (wrong class type)
     ## somehow I can't get the !! option to work (from rlang) that is mentioned on the function page of varSelectInput
     ## so... I made this ugly lapply thing below to unlist the variable options input
@@ -399,7 +417,7 @@ server <- function(input, output, session) {
     subset_data_addNames <- subset_data[getPrettyName, on = 'variable', prettyName := i.prettyName]
   
     ## easy fix for problem with y-axis, that I would like to start at zero, except when the error balances are included
-    ifelse(any(grepl("Error", var_op)), limit_y <- NA, limit_y <- 0)  ## if Error is present, unleash the y-axis from it's zero
+    ifelse(any(subset_data_addNames$value < 0), limit_y <- NA, limit_y <- 0)  ## if any values is below zero, unleash the y-axis from it's zero limit
     
     if(input$measurement_data == TRUE){
       subset_msm_data <- molten_measurement_data()[(prettyName %in% unique(subset_data_addNames$prettyName)) &
@@ -408,6 +426,9 @@ server <- function(input, output, session) {
     }
     
     # dev.new() ## open a new window to display & debug a plot
+    
+    ## make node legend alpha numeric
+    subset_data_addNames$node <- factor(subset_data_addNames$node, levels = mixedsort(levels(subset_data_addNames$node)))
       
     # plot <- ggplot(subset_data_addNames, aes(x = Time, y = value, color = filename)) +
     plot <- ggplot(subset_data_addNames, aes(x = Time, y = value)) +
