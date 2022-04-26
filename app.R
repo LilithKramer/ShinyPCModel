@@ -141,7 +141,7 @@ body <- dashboardBody(
                     It is also expected that the 'RunId' column is the first column in the .txt file that contains the headers.", br(),
                     "If you choose the", strong(" R format "), ",", em(" all files"), " should contain headers. However, the order of the headers does not matter.", br(),
                     "Maximum file size is 160MB.",),
-                  radioButtons("model_type", label = "Data source", choices = c("Excel", "R"), selected = "R"),
+                  radioButtons("model_type", label = "Data source", choices = c("Excel", "R"), selected = "Excel"),
                   conditionalPanel(condition = "input.model_type == 'R'",
                                    radioButtons("model_r_type", label = "Model type", choices = c("Single run", "Network"), selected = "Network")),
                   fileInput("input_model_data", NULL,
