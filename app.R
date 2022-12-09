@@ -87,7 +87,7 @@ get_colours <- function(factor_vector){
 
 options(scipen = 999)  ## no scientific numbering
 options(shiny.reactlog = T)
-options(shiny.maxRequestSize = 160*1024^2) ## maximum upload size is now 160Mb, standard for R shiny is 5Mb. 
+options(shiny.maxRequestSize = 360*1024^2) ## maximum upload size is now 160Mb, standard for R shiny is 5Mb. 
 ## This pc cannot handle much more than 160Mb, due to processing steps and objects that will take up too much space. 
 
 
@@ -167,7 +167,7 @@ body <- dashboardBody(
                   status = "success",
                   collapsible = F,
                   uiOutput("checkbox_geomlines"),
-                  conditionalPanel(condition = "input.model_type == 'R'",
+                  conditionalPanel(condition = "input.model_type == 'R' & input.model_r_type == 'Network'",
                                    uiOutput("checkbox_nodes")),
                   p(""),
                   uiOutput("checkbox_facets"),
@@ -274,7 +274,6 @@ server <- function(input, output, session) {
   
   
   molten_data <- reactive({
-    # browser()
     if(input$model_type == "Excel"){toMelt <- setdiff(colnames(input_model_data()), intersect(colnames(input_model_data()), cOutNamesExcel))}
     if(input$model_type == "R"){toMelt <- setdiff(colnames(input_model_data()), intersect(colnames(input_model_data()), cOutNamesR))}
     totally_molten <- melt(input_model_data(), id.vars = toMelt)
