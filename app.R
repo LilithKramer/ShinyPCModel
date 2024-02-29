@@ -153,7 +153,7 @@ body <- dashboardBody(
                             placeholder = "No files have been selected yet."),
                   div(style = 'overflow-x: scroll', tableOutput("display_input_model_data")),
                   p(""),
-                  p("If you want to add measurements, please check out the example file in the input folder of this app. The column names of the measurements in the measurement file can vary, as long as you ensure that you add/adjust their name to/in the Measurement column of the output_names.csv in the settings folder."),
+                  p("If you want to add measurements, please check out the example file in the input folder of this app. The time and location columns have to be present. The column names of the measurements in the measurement file can vary, as long as you ensure that you add/adjust their name to/in the Measurement column of the output_names.csv in the settings folder."),
                   checkboxInput("measurement_data", label = "Add measurement data"),
                   conditionalPanel(condition = "input.measurement_data == true",
                                    fileInput("input_measurement_data", NULL,
