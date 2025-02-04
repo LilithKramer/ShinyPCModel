@@ -95,13 +95,13 @@ options(shiny.maxRequestSize = 360*1024^2) ## maximum upload size is now 160Mb, 
 ##== set paths ========
 
 #!# directories
-dirHome <- "C:/Users/Lilith Kramer/Documents/PhD/Documenten/_01. Onderzoek/01.06. Modellen/01.06.05. R/01.06.01. ShinyPCModel/"
-dirSet <- "settings/"
+dirHome <- "C:/Users/LilithK/Documents/PhD/_01. Onderzoek/01.06. Modellen/01.06.05. R/01.06.01. ShinyPCModel/"
+dirSet <- "settings"
 
 fnSettings <- "output_names.csv" ## this file is made with the R script "make_output_names_csv.R". 
 
 ## load settings file & rework for labelling and subsetting
-dtOutNames <- data.table::fread(paste(dirSet, fnSettings, sep = ""))
+dtOutNames <- data.table::fread(file.path(dirHome, dirSet, fnSettings))
 dtOutNames$Rname <- gsub("_", "", dtOutNames$Excelname)
 cOutNamesR <- unique(dtOutNames$Rname)
 cOutNamesExcel <- unique(dtOutNames$Excelname)
@@ -401,6 +401,8 @@ server <- function(input, output, session) {
     ## so... I made this ugly lapply thing below to unlist the variable options input
     var_op <- unlist(lapply(list_plot_input()$var, function(x) rlang::as_name(x))) ## niet chique
     
+    #browser()
+    
     ## get subset
     subset_data <- molten_data()[(filename %in% list_plot_input()$run) & 
                                  (variable %in% var_op) &
@@ -418,19 +420,30 @@ server <- function(input, output, session) {
     subset_data_addNames <- subset_data[getPrettyName, on = 'variable', prettyName := i.prettyName]
   
     ## easy fix for problem with y-axis, that I would like to start at zero, except when the error balances are included
-    ifelse(any(subset_data_addNames$value < 0), limit_y <- NA, limit_y <- 0)  ## if any values is below zero, unleash the y-axis from it's zero limit
+    ifelse(any(is.na(subset_data_addNames$value)), limit_y <- 0, ## if data is missing, then set to zero (this can happen when the model has crashed)
+           ifelse(any(subset_data_addNames$value < 0), limit_y <- NA, limit_y <- 0))  ## else if any values is below zero, unleash the y-axis from it's zero limit
     
     if(input$measurement_data == TRUE){
+      if(input$model_type != "Excel" & input$model_r_type == 'Network'){
+        subset_msm_data <- molten_measurement_data()[(prettyName %in% unique(subset_data_addNames$prettyName)) &
+                                                       (Time >= list_plot_input()$ts[1]) & 
+                                                       (Time <= list_plot_input()$ts[2]) &
+                                                       (location %in% list_plot_input()$nodes),]
+      }
+      if(!(input$model_type != "Excel" & input$model_r_type == 'Network')){
       subset_msm_data <- molten_measurement_data()[(prettyName %in% unique(subset_data_addNames$prettyName)) &
                                                    (Time >= list_plot_input()$ts[1]) & 
                                                    (Time <= list_plot_input()$ts[2]),]
+      }
     }
     
     # dev.new() ## open a new window to display & debug a plot
     
     ## make node legend alpha numeric
     subset_data_addNames$node <- factor(subset_data_addNames$node, levels = mixedsort(levels(subset_data_addNames$node)))
-      
+    
+    #browser()
+    
     # plot <- ggplot(subset_data_addNames, aes(x = Time, y = value, color = filename)) +
     plot <- ggplot(subset_data_addNames, aes(x = Time, y = value)) +
       {if(input$model_type != "Excel" & input$model_r_type == 'Network') geom_line(aes(color = node, linetype = filename))} +

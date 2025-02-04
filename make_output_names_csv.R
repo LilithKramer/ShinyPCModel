@@ -24,11 +24,12 @@ library(data.table)
 ##== set paths ========
 
 #!# directories
-dirHome <- "C:/Users/Lilith Kramer/PCModel/PCModel-master/Licence_agreement/I_accept/PCModel1350/PCModel/3.00/Models/PCLake+/6.13.16/"
+dirHome <- "C:/Users/LilithK/Documents/PCModel/PCModel - work version/Licence_agreement/I_accept/PCModel1350/PCModel/3.00/Models/PCLake+/6.13.16/"
 list.files(dirHome)
 
-fnGetNames <- "PL613162PLUS_Rnet.xls"
-
+#fnGetNames <- "PL613162PLUS_Rnet.xls"
+#fnGetNames <- "PL613162PLUS_202205_work_filters4_Mussels_debug.xls"
+fnGetNames <- "PL613162PLUS_Network_FrieseBoezem_SEF.xls"
 
 
 ##== load the PCLake+ excel sheets ========
@@ -96,11 +97,18 @@ upst_add <- data.frame(ExcelSheet = "derivatives",
                        Unit        = c(rep("_m_^-3*_d_^-1", 46), "_m_"),
                        Measurement = "")
 
+upstTot_add <- data.frame(ExcelSheet = "derivatives",
+                          Excelname = c("wDTranWEpiUpstTot", "wNTranWEpiUpstTot", "wO2TranWEpiUpstTot", "wPTranWEpiUpstTot", "wSiTranWEpiUpstTot",
+                                        "wDTranWHypUpstTot", "wNTranWHypUpstTot", "wO2TranWHypUpstTot", "wPTranWHypUpstTot", "wSiTranWHypUpstTot"),
+                          Unit      = c(rep("_m_^-3*_d_^-1", 10)),
+                          Measurement = "")
+
+
 
 ##== make into one dataframe ========
 
 # output_names <- rbindlist(list(states_deriv, states_init, states_name, parameters, initstates, deriv))
-output_names <- rbindlist(list(deriv, initstates, parameters,  states_init, states_name, states_deriv, upst_add))
+output_names <- rbindlist(list(deriv, initstates, parameters,  states_init, states_name, states_deriv, upst_add, upstTot_add))
 
 
 
@@ -115,7 +123,8 @@ output_names$Measurement <- mapvalues(output_names$Measurement,
 output_names_export <- output_names[-which(is.na(output_names$Excelname) | is.na(output_names$Unit)),]
 
 write.table(x = output_names_export, 
-            file = "C:/Users/Lilith Kramer/Documents/PhD/Documenten/_01. Onderzoek/01.06. Modellen/01.06.05. R/01.06.01. ShinyPCModel/settings/output_names_shiny.csv",
+            file = "C:/Users/LilithK/Documents/PhD/_01. Onderzoek/01.06. Modellen/01.06.05. R/01.06.01. ShinyPCModel/settings/output_names_shiny_SEFproject.csv",
+            #file = "C:/Users/Lilith Kramer/Documents/PhD/Documenten/_01. Onderzoek/01.06. Modellen/01.06.05. R/01.06.01. ShinyPCModel/settings/output_names_shiny__PL613162PLUS_202205_work_filters4_Mussels.csv",
             row.names = F,
             sep = ",",
             quote = F)
